@@ -1,0 +1,22 @@
+{
+  "name": "nodejs-demo-app",
+  "version": "1.0.0",
+  "description": "A sample Node.js web application with automated CI/CD pipeline using GitHub Actions and DockerHub.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "nodejs",
+    "devops",
+    "ci-cd",
+    "github-actions",
+    "docker"
+  ],
+  "author": "Elevate Labs Intern",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
