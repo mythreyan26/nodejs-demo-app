@@ -147,6 +147,82 @@ The pipeline defines two automated sequential jobs:
 
 ---
 
+## 🔄 Task 2: Jenkins CI/CD Pipeline with Docker
+
+This repository includes an automated **Declarative Jenkins Pipeline** ([`Jenkinsfile`](./Jenkinsfile)) configured to build, test, containerize, deploy, and verify the application on a local Jenkins automation server using Docker Desktop.
+
+### 1. Jenkins CI/CD Architecture & Flow
+
+```mermaid
+flowchart TD
+    A["Manual 'Build Now' Trigger in Jenkins"] --> B["Jenkins Pipeline Triggered"]
+    
+    subgraph Pipeline["Declarative Jenkins Pipeline (Jenkinsfile)"]
+        B --> C["Stage 1: Install Dependencies (`npm ci`)"]
+        C --> D["Stage 2: Run Tests (`npm test`)"]
+        D --> E["Stage 3: Build Docker Image (`docker build`)"]
+        E --> F["Stage 4: Deploy Container (`docker run`)"]
+        F --> G["Stage 5: Verify Deployment (`curl /health`)"]
+    end
+
+    G --> H["Post Actions: Success Notification & Live App Links"]
+    D -.->|Tests Fail| I["Pipeline Fails & Halts Execution"]
+    G -.->|Health Check Fails| I
+```
+
+### 2. Pipeline Stages Detailed
+
+| # | Stage Name | Script / Command | Purpose |
+| :--- | :--- | :--- | :--- |
+| **1** | **Install Dependencies** | `bat 'call npm ci'` | Deterministically installs clean project dependencies from `package-lock.json`. |
+| **2** | **Test Application** | `bat 'call npm test'` | Executes unit & integration tests using Node.js native test runner (`test/app.test.js`). |
+| **3** | **Build Docker Image** | `bat 'docker build -t nodejs-demo-app:%BUILD_NUMBER% -t nodejs-demo-app:latest .'` | Compiles lean production image based on `node:20-alpine`, tagged dynamically with Jenkins build number. |
+| **4** | **Deploy Container** | `bat 'docker rm -f %APP_NAME% ... docker run -d -p 3000:3000 ...'` | Idempotently stops/removes any existing container and launches the new build on port `3000`. |
+| **5** | **Verify Deployment** | `bat 'ping 127.0.0.1 -n 6 >nul && curl -s -f http://localhost:3000/health'` | Wait for the container to initialize, followed by an automated HTTP ping to `http://localhost:3000/health` using `curl`. |
+
+### 3. Jenkins Configuration Guide
+
+1. **System Prerequisites:**
+   - **Java 21 (OpenJDK / Eclipse Temurin)**
+   - **Jenkins Automation Server** running at `http://localhost:8080`
+   - **Docker Desktop** (Engine running with WSL2 backend)
+   - **Git & Node.js**
+2. **Create the Pipeline Item in Jenkins:**
+   - Open Jenkins dashboard at `http://localhost:8080`.
+   - Click **New Item**, enter `nodejs-demo-app-pipeline`, choose **Pipeline**, and click **OK**.
+   - Under **Pipeline Definition**, select **Pipeline script from SCM**.
+   - Choose **SCM**: `Git`.
+   - Set **Repository URL**: `https://github.com/mythreyan26/nodejs-demo-app.git`.
+   - Set **Branch Specifier**: `*/main`.
+   - Set **Script Path**: `Jenkinsfile`.
+   - Click **Save**.
+3. **Windows 11 Compatibility Optimizations:**
+   - The `Jenkinsfile` environment block automatically prepends Docker Desktop (`...\DockerDesktop\resources\bin`), Node.js, and Git to the execution `PATH`, allowing the Jenkins Windows Service to invoke `docker` and `npm` seamlessly.
+
+### 4. How to Run & Verify the Pipeline
+
+1. **Triggering the Build:**
+   - From the `nodejs-demo-app-pipeline` dashboard, click **Build Now**.
+   - Monitor the visual **Stage View** as each of the 5 stages turns green.
+   - Inspect build logs via **Console Output** to verify `Finished: SUCCESS`.
+2. **Verifying the Live Deployment:**
+   - **Root Web Endpoint:** Visit `http://localhost:3000` to verify JSON welcome response:
+     ```json
+     {
+       "status": "success",
+       "message": "Welcome to Elevate Labs DevOps Internship - Task 1 Demo App!",
+       "version": "1.0.0"
+     }
+     ```
+   - **Healthcheck Endpoint:** The Jenkins Verify Deployment stage checks `http://localhost:3000/health` with `curl` to confirm the endpoint responds successfully.
+3. **Verify via Docker CLI:**
+   ```bash
+   docker ps
+   # Lists container 'nodejs-demo-app' running on port 0.0.0.0:3000->3000/tcp with status Up (healthy)
+   ```
+
+---
+
 ## 💡 Interview Questions & In-Depth Answers
 
 ### 1. What is CI/CD?
@@ -198,3 +274,30 @@ A **runner** is an application/server that executes the jobs defined in a GitHub
 - **Using `act` (Nephrolepis/act):** A tool that runs GitHub Actions locally inside Docker containers by parsing `.github/workflows/` files.
 - **Local Testing Scripts:** Execute the exact same commands locally that run in CI (`npm ci`, `npm test`, `docker build`).
 - **Feature/Test Branches:** Push to a dedicated test branch in a personal fork to observe GitHub Actions runner execution before merging to `main`.
+
+### 9. What is Jenkins, and how is it used in CI/CD?
+Jenkins is an open-source automation server written in Java. In a CI/CD workflow, it can trigger and orchestrate builds, execute automated tests, package applications, and deploy artifacts.
+
+### 10. What is a Jenkinsfile?
+A `Jenkinsfile` is a text file that contains the definition of a Jenkins Pipeline written in Groovy syntax (Pipeline-as-Code). It is stored in the root directory of the application repository, enabling the CI/CD pipeline to be versioned, reviewed, and audited alongside the application source code.
+
+### 11. How do you create and configure Jenkins pipelines?
+Pipelines can be created in the Jenkins web UI by creating a **Pipeline** job and pointing it to a Git repository using **Pipeline script from SCM**. You specify the repository URL, credentials (if private), target branch (`*/main`), and the path to the `Jenkinsfile`. Jenkins automatically pulls and executes the pipeline steps defined in that file.
+
+### 12. What are some common stages in a Jenkins pipeline?
+Common stages include:
+1. **Checkout / Source:** Pulling the latest code from SCM.
+2. **Build / Dependencies:** Installing packages (`npm ci`) or compiling source code.
+3. **Test:** Running unit, integration, and security/linting tests (`npm test`).
+4. **Package / Containerize:** Building Docker images (`docker build`).
+5. **Deploy:** Deploying containers or releasing to servers/Kubernetes (`docker run`).
+6. **Verify / Healthcheck:** Pinging health check endpoints (`curl /health`) to ensure uptime.
+
+### 13. What is the difference between a declarative and scripted Jenkins pipeline?
+| Feature | Declarative Pipeline (`pipeline { ... }`) | Scripted Pipeline (`node { ... }`) |
+| :--- | :--- | :--- |
+| **Syntax** | Structured, opinionated, easy to read and maintain | Imperative Groovy scripting |
+| **Validation** | Built-in syntax checks before pipeline execution starts | Validated only at runtime |
+| **Error Handling** | Declarative `post` blocks (`success`, `failure`, `always`) | `try-catch-finally` programming blocks |
+| **Best For** | Modern CI/CD standards, recommended for most projects | Complex logic, dynamic stages, custom loops |
+
